@@ -6,16 +6,6 @@
 (defclass context ()
   ((bindings :initarg :bindings :initform nil :reader bindings)))
 
-;; types
-;; integer
-;; (function (arg-type) expr-type)
-
-;; expressions
-;; x
-;; 1
-;; (funcall fn arg)
-;; (lambda (x) y)
-
 ;;---------------------------------------------
 
 (defun make-context (&optional bindings)
@@ -30,17 +20,6 @@
 	  (error "Var ~a is not in scope" name)))
 
 ;;---------------------------------------------
-
-(define-check-system my-system ())
-
-(define-fact my-system ()
-  ())
-
-(define-rule let my-system
-  :check (lambda (context expression)
-		   ..)
-  :infer #'let-infer)
-
 
 ;; infer & check could return 2 vals new expression and type
 
