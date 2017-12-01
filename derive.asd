@@ -11,5 +11,4 @@
   :serial t
   :components ((:file "package")
 			   (:file "readtables")
-			   (:file "utils")
                (:file "derive")))
