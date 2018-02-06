@@ -84,6 +84,7 @@
        ;; subtypep with return a function name that will convert from original
        ;; type to subtype. Normally #'identity, but could be something else.
        ;;        ↓↓
-       (assert (equal inferred type))))))
+       (assert (equal inferred type))
+       inferred))))
 
 ;;---------------------------------------------
