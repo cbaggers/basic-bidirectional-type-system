@@ -3,6 +3,11 @@
 
 ;;---------------------------------------------
 
+;; uvar = unification variable
+;; tvar = (polymorphic) type variable. Always bound by a forall
+
+;;---------------------------------------------
+
 (defvar *uvar-id* -1)
 (defvar *tvar-id* -1)
 
@@ -84,6 +89,11 @@
          (table (alist-hash-table paired)))
     (foralls names (subst-uvars z-type table))))
 
+(defun check-occurs (name type)
+  (assert (not (find name (unification-vars type))) ()
+          "Occurs check failed~%name: ~a~%type: ~a"
+          name type))
+
 ;;---------------------------------------------
 
 (defun zonk (type)
@@ -112,12 +122,14 @@
            (forall ,_ ,type2))
           (unify type1 type2))
         ;;
-        (`((uvar ,_ ,_)
+        (`((uvar ,name ,type)
            ,type2)
+          (check-occurs name type2)
           (setf (third zonk-a) type2))
         ;;
         (`(,type1
-           (uvar ,_ ,_))
+           (uvar ,name ,type))
+          (check-occurs name type1)
           (setf (third zonk-b) type1))
         (otherwise (error "Can't unify ~a and ~a" zonk-a zonk-b))))))
 
@@ -168,6 +180,9 @@
 
 (defvar test0 (infer (make-context) '(lambda (x) x)))
 (defvar test1 (infer (make-context) '(funcall (lambda (x) x) 1)))
-
-;; add depth to uvars then when generalizing only forall things >= our depth
-;; also ask olle about occurs, somethign about acessing vars and then instantiating fresh uvars for outermost foralls
+(defvar test2 (generalize (infer (make-context) '(lambda (a) a))))
+;; TODO:
+;;
+;; add depth to uvars then when generalizing only forall things >= our depth.
+;; When you unify with another type you will need to fix up it's types to be
+;; at least our depth too.
