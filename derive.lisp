@@ -4,6 +4,7 @@
 ;;---------------------------------------------
 
 (defvar *uvar-id* -1)
+(defvar *tvar-id* -1)
 
 (defclass context ()
   ((bindings :initarg :bindings :initform nil :reader bindings)))
@@ -12,9 +13,6 @@
 
 (defun make-context (&optional bindings)
   (make-instance 'context :bindings bindings))
-
-(defun make-uvar ()
-  `(uvar ,(incf *uvar-id*) nil))
 
 (defun add-binding (name type context)
   (make-context (cons (cons name type)
@@ -26,10 +24,74 @@
 
 ;;---------------------------------------------
 
+(defun make-uvar ()
+  `(uvar ,(incf *uvar-id*) nil))
+
+(defun make-forall (name type)
+  `(forall ,name ,type))
+
+(defun make-tvar (name)
+  `(tvar ,name))
+
+(defun fresh-tvar-name ()
+  (format-symbol :derive "TVAR~a" (incf *tvar-id*)))
+
+(defun fresh-tvar-names (count)
+  (loop :for i :below count :collect (fresh-tvar-name)))
+
+;;---------------------------------------------
+
+(defun foralls (names type)
+  (if names
+      (make-forall (first names) (foralls (rest names) type))
+      type))
+
+(defun unification-vars (type)
+  (match type
+    ;;
+    (`(function (,arg) ,res)
+      (remove-duplicates
+       (union (unification-vars arg)
+              (unification-vars res))
+       :test #'equal))
+    ;;
+    (`(uvar ,name ,_)
+      (list name))
+    ;; tvar, integer, boolean
+    (otherwise nil)))
+
+(defun subst-uvars (type hash-table)
+  (match type
+    ('integer type)
+    ('boolean type)
+    (`(function (,arg) ,res)
+      `(function (,(subst-uvars arg hash-table))
+                 ,(subst-uvars res hash-table)))
+    (`(uvar ,name ,_)
+      (or (gethash name hash-table)
+          type))
+    (`(tvar ,_) type)
+    (`(forall ,name ,fa-type)
+      (make-forall name (subst-uvars fa-type hash-table)))
+    (otherwise (error "subst-uvars did not recognise ~a" type))))
+
+(defun generalize (type)
+  (let* ((z-type (zonk type))
+         (uvars (unification-vars z-type))
+         (names (fresh-tvar-names (length uvars)))
+         (tvars (mapcar #'make-tvar names))
+         (paired (mapcar #'cons uvars tvars))
+         (table (alist-hash-table paired)))
+    (foralls names (subst-uvars z-type table))))
+
+;;---------------------------------------------
+
 (defun zonk (type)
   (match type
     (`(function (,a) ,b) `(function (,(zonk a)) ,(zonk b)))
     (`(uvar ,_ ,utype) (or utype type))
+    (`(tvar ,_) type)
+    (`(forall ,name ,itype) (make-forall name (zonk itype)))
     (otherwise type)))
 
 (defun unify (type-a type-b)
@@ -40,12 +102,23 @@
                 (and (eq zonk-a 'integer) (eq zonk-b 'integer))
                 (and (eq zonk-a 'boolean) (eq zonk-b 'boolean)))
       (match (list zonk-a zonk-b)
+        ;;
         (`((function (,a0) ,b0)
            (function (,a1) ,b1))
           (unify a0 a1)
           (unify b0 b1))
-        (`((uvar ,_ ,_) ,type2) (setf (third zonk-a) type2))
-        (`(,type1 (uvar ,_ ,_)) (setf (third zonk-b) type1))
+        ;;
+        (`((forall ,_ ,type1)
+           (forall ,_ ,type2))
+          (unify type1 type2))
+        ;;
+        (`((uvar ,_ ,_)
+           ,type2)
+          (setf (third zonk-a) type2))
+        ;;
+        (`(,type1
+           (uvar ,_ ,_))
+          (setf (third zonk-b) type1))
         (otherwise (error "Can't unify ~a and ~a" zonk-a zonk-b))))))
 
 ;; infer & check could return 2 vals new expression and type
